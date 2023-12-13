@@ -3,6 +3,7 @@
 #include <time.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <string.h>
 
 #include "eventlist.h"
 
@@ -174,9 +175,10 @@ int ems_show(unsigned int event_id, int fd) {
   for (size_t i = 1; i <= event->rows; i++) {
     for (size_t j = 1; j <= event->cols; j++) {
       unsigned int* seat = get_seat_with_delay(event, seat_index(event, i, j));
-      char seatstr[2];
+      char seatstr[10];
       sprintf(seatstr, "%u", *seat);
-      write(fd, seatstr, sizeof(seatstr) - 1);
+      seatstr[strlen(seatstr)] = '\0';
+      write(fd, seatstr, sizeof(char)*(strlen(seatstr)));
 
       if (j < event->cols) {
         write(fd, " ", 1);

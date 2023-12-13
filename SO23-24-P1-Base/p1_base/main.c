@@ -7,7 +7,7 @@
 #include <string.h>
 #include <dirent.h>
 #include <sys/stat.h>
-#include<sys/wait.h>
+#include <sys/wait.h>
 
 #include "constants.h"
 #include "operations.h"
@@ -46,13 +46,13 @@ int main(int argc, char *argv[]) {
   }
 
   while ((dp = readdir(dirp)) != NULL){
-    if (strcmp(dp->d_name, ".") == 0 || strcmp(dp->d_name, "..") == 0){
+    if (!strcmp(dp->d_name, ".") || !strcmp(dp->d_name, ".."))
       continue;
-    }
+      
     int inputFd, outputFd, openFlags;
     mode_t filePerms;
     pid_t pid;
-    char buffer[100];
+    char buffer[50];
 
     if (n_proc++ < MAX_PROC)
       pid = fork();
@@ -61,9 +61,10 @@ int main(int argc, char *argv[]) {
       fprintf(stderr, "Error creating process.\n");
       return -1;
     }
-    if (pid == 0){
+    if (!pid){
       strcpy(buffer, dirpath);
       strcat(buffer, dp->d_name);
+      buffer[strlen(buffer)] = '\0';
       
       if((inputFd = open(buffer, O_RDONLY)) == -1){
         fprintf(stderr, "open error: %s\n", strerror(errno));
@@ -175,14 +176,19 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "Error closing file\n");
         return -1;
       }
+      if(close (outputFd) == -1){
+        fprintf(stderr, "Error closing file\n");
+        return -1;
+      }
       n_proc--;
       exit(0);
     }
-    else{
-      wait(NULL);
-    }
   }
-  closedir(dirp);
+  wait(NULL);
+  if(closedir(dirp) == -1){
+    fprintf(stderr, "Error closing directory\n");
+    return -1;
+  }
   ems_terminate();
   return 0;
 }

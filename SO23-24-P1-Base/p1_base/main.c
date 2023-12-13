@@ -16,6 +16,7 @@
 int main(int argc, char *argv[]) {
   unsigned int state_access_delay_ms = STATE_ACCESS_DELAY_MS;
   int MAX_PROC, n_proc;
+  
 
   n_proc = 0;
   MAX_PROC = atoi(argv[2]);
@@ -45,13 +46,15 @@ int main(int argc, char *argv[]) {
     return -1;
   }
 
+  int dp_n = 0;
   while ((dp = readdir(dirp)) != NULL){
     if (!strcmp(dp->d_name, ".") || !strcmp(dp->d_name, ".."))
       continue;
-      
+    
+    dp_n++;
     int inputFd, outputFd, openFlags;
-    mode_t filePerms;
     pid_t pid;
+    mode_t filePerms;
     char buffer[50];
 
     if (n_proc++ < MAX_PROC)
@@ -184,7 +187,11 @@ int main(int argc, char *argv[]) {
       exit(0);
     }
   }
-  wait(NULL);
+  int stat;
+  for(int i = 0; i < dp_n; i++){
+    pid_t cpid = wait(&stat);
+    printf("Child %d terminated with status: %d\n", cpid, stat);
+  }
   if(closedir(dirp) == -1){
     fprintf(stderr, "Error closing directory\n");
     return -1;

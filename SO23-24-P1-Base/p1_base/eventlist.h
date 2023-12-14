@@ -1,11 +1,13 @@
 #ifndef EVENT_LIST_H
 #define EVENT_LIST_H
 
+#include <pthread.h>
 #include <stddef.h>
 
 struct Event {
   unsigned int id;            /// Event id
   unsigned int reservations;  /// Number of reservations for the event.
+  pthread_mutex_t event_mutex;
 
   size_t cols;  /// Number of columns.
   size_t rows;  /// Number of rows.

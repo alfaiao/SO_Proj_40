@@ -92,6 +92,7 @@ int ems_create(unsigned int event_id, size_t num_rows, size_t num_cols) {
   event->rows = num_rows;
   event->cols = num_cols;
   event->reservations = 0;
+  pthread_mutex_init(&event->event_mutex, NULL);
   event->data = malloc(num_rows * num_cols * sizeof(unsigned int));
 
   if (event->data == NULL) {
@@ -191,21 +192,24 @@ int ems_show(unsigned int event_id, int fd) {
   return 0;
 }
 
-int ems_list_events() {
+int ems_list_events(int fd) {
   if (event_list == NULL) {
     fprintf(stderr, "EMS state must be initialized\n");
     return 1;
   }
 
   if (event_list->head == NULL) {
-    printf("No events\n");
+    write(fd, "No events\n", 10);
     return 0;
   }
 
   struct ListNode* current = event_list->head;
   while (current != NULL) {
-    printf("Event: ");
-    printf("%u\n", (current->event)->id);
+    write(fd, "Event: ", 7);
+    char eventidstr[10];
+    sprintf(eventidstr, "%u", (current->event)->id);
+    eventidstr[strlen(eventidstr)] = '\0';
+    write(fd, eventidstr, sizeof(char)*(strlen(eventidstr)));
     current = current->next;
   }
 

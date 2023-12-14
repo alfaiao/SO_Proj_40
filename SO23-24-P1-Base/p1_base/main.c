@@ -26,7 +26,7 @@ struct CommandInfo {
     unsigned int delay;
 };
 
-pthread_mutex_t mutex_in;
+pthread_mutex_t mutex_in = PTHREAD_MUTEX_INITIALIZER;
 
 void *process_command(void *arg) {
   struct CommandInfo *cmd_info = (struct CommandInfo *)arg;
@@ -35,11 +35,12 @@ void *process_command(void *arg) {
 
   switch (get_next(cmd_info->inputFd)) {
         case CMD_CREATE:
-            pthread_mutex_unlock(&mutex_in);
             if (parse_create(cmd_info->inputFd, &cmd_info->event_id, &cmd_info->num_rows, &cmd_info->num_columns) != 0) {
                 fprintf(stderr, "Invalid command. See HELP for usage\n");
+                pthread_mutex_unlock(&mutex_in);
                 break;
             }
+            pthread_mutex_unlock(&mutex_in);
             if (ems_create(cmd_info->event_id, cmd_info->num_rows, cmd_info->num_columns)) {
                 fprintf(stderr, "Failed to create event\n");
             }
@@ -47,15 +48,15 @@ void *process_command(void *arg) {
             break;
 
         case CMD_RESERVE:
-            pthread_mutex_unlock(&mutex_in);
             cmd_info->num_coords = parse_reserve(cmd_info->inputFd, MAX_RESERVATION_SIZE, 
                                       &cmd_info->event_id, cmd_info->xs, cmd_info->ys);
 
             if (cmd_info->num_coords == 0) {
                 fprintf(stderr, "Invalid command. See HELP for usage\n");
+                pthread_mutex_unlock(&mutex_in);
                 break;
             }
-
+            pthread_mutex_unlock(&mutex_in);
             if (ems_reserve(cmd_info->event_id, cmd_info->num_coords, cmd_info->xs, cmd_info->ys)) {
                 fprintf(stderr, "Failed to reserve seats\n");
             }
@@ -63,11 +64,12 @@ void *process_command(void *arg) {
             break;
 
         case CMD_SHOW:
-            pthread_mutex_unlock(&mutex_in);
             if (parse_show(cmd_info->inputFd, &cmd_info->event_id) != 0) {
+                pthread_mutex_unlock(&mutex_in);
                 fprintf(stderr, "Invalid command. See HELP for usage\n");
             } 
             else {
+              pthread_mutex_unlock(&mutex_in);
               if (ems_show(cmd_info->event_id, cmd_info->outputFd)) {
                   fprintf(stderr, "Failed to show event\n");
               }
@@ -82,14 +84,16 @@ void *process_command(void *arg) {
             break;
 
         case CMD_WAIT:
-            pthread_mutex_unlock(&mutex_in);
             if (parse_wait(cmd_info->inputFd, &cmd_info->delay, NULL) == -1) {
+                pthread_mutex_unlock(&mutex_in);
                 fprintf(stderr, "Invalid command. See HELP for usage\n");
             } else {
                 if (cmd_info->delay > 0) {
                     printf("Waiting...\n");
                     ems_wait(cmd_info->delay);
+                    pthread_mutex_unlock(&mutex_in);
                 }
+                pthread_mutex_unlock(&mutex_in);
             }
             break;
 
@@ -163,11 +167,9 @@ int main(int argc, char *argv[]) {
   int dp_n = 0;
   pthread_t thread_array[MAX_THREADS];
   struct CommandInfo cmd_info_array[MAX_THREADS];
-  pthread_mutex_init(&mutex_in, NULL);
-  
 
   while ((dp = readdir(dirp)) != NULL){
-    if (!strcmp(dp->d_name, ".") || !strcmp(dp->d_name, ".."))
+    if (!strcmp(dp->d_name, ".") || !strcmp(dp->d_name, "..") || strstr(dp->d_name, ".out") )
       continue;
     
     dp_n++;
@@ -193,7 +195,7 @@ int main(int argc, char *argv[]) {
         return -1;
       };
 
-      openFlags = O_CREAT | O_WRONLY | O_APPEND;
+      openFlags = O_CREAT | O_WRONLY | O_APPEND |O_TRUNC;
       filePerms = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH; 
       strtok(buffer, ".");
       strcat(buffer, ".out");
@@ -215,14 +217,7 @@ int main(int argc, char *argv[]) {
       int result;   
       for (int i = 0; i < MAX_THREADS; i++){
         pthread_join(thread_array[i], (void**)&result);
-      }     
-
-      if(result == -1){
-        for (int i = 0; i < MAX_THREADS; i++){
-          pthread_join(thread_array[i], (void**)&result);
-        }
       }
-
 
       if(close (inputFd) == -1){
         fprintf(stderr, "Error closing file\n");

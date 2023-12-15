@@ -39,6 +39,7 @@ void *process_command(void *arg) {
   unsigned int thread_id;
   int eof = 0;
   while(!eof){
+    pthread_mutex_lock(&mutex_in);
     pthread_mutex_lock(&stop_mutex);
     if (thread_stop == cmd_info->thread_id){
       printf("Waiting...\n");
@@ -47,10 +48,10 @@ void *process_command(void *arg) {
     }
     if (barrier == 1){
       pthread_mutex_unlock(&stop_mutex);
+      pthread_mutex_unlock(&mutex_in);
       pthread_exit((void*)1);
     }
     pthread_mutex_unlock(&stop_mutex);
-    pthread_mutex_lock(&mutex_in);
     switch (get_next(cmd_info->inputFd)) {
       case CMD_CREATE:
           if (parse_create(cmd_info->inputFd, &cmd_info->event_id, &cmd_info->num_rows, &cmd_info->num_columns) != 0) {
@@ -144,6 +145,9 @@ void *process_command(void *arg) {
           break;
 
       case CMD_BARRIER:
+          pthread_mutex_lock(&stop_mutex);
+          barrier = 1;
+          pthread_mutex_unlock(&stop_mutex);
           pthread_mutex_unlock(&mutex_in);
           break;
       case CMD_EMPTY:
@@ -254,23 +258,18 @@ int main(int argc, char *argv[]) {
             result = 1;
         }
         barrier = 0;
-        for (int i = 1; i <= MAX_THREADS; i++){
-          cmd_info_array[i].inputFd = inputFd;
-          cmd_info_array[i].outputFd = outputFd;
-          cmd_info_array[i].thread_id = (unsigned int)i;
-          if (pthread_create(&thread_array[i], NULL, process_command, (void *)&cmd_info_array[i]) != 0) {
-            fprintf(stderr, "Error creating thread\n");
-            return -1;
-          }
+        if (result == 1){
+          for (int i = 1; i <= MAX_THREADS; i++){
+            cmd_info_array[i].inputFd = inputFd;
+            cmd_info_array[i].outputFd = outputFd;
+            cmd_info_array[i].thread_id = (unsigned int)i;
+            if (pthread_create(&thread_array[i], NULL, process_command, (void *)&cmd_info_array[i]) != 0) {
+              fprintf(stderr, "Error creating thread\n");
+              return -1;
+            }
+          }  
         }
       }
-
-      for (int i = 1; i <= MAX_THREADS; i++){
-        pthread_join(thread_array[i], (void**)&result_thread);
-        if (result_thread == 1)
-          result = 1;
-      }
-    
 
       if(close (inputFd) == -1){
         fprintf(stderr, "Error closing file\n");

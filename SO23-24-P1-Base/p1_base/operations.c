@@ -9,6 +9,7 @@
 
 pthread_mutex_t mutex_out = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t event_lock = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t event_list_lock = PTHREAD_MUTEX_INITIALIZER;
 
 static struct EventList* event_list = NULL;
 static unsigned int state_access_delay_ms = 0;
@@ -117,16 +118,17 @@ int ems_create(unsigned int event_id, size_t num_rows, size_t num_cols) {
     event->data[i] = 0;
   }
 
+  pthread_mutex_lock(&event_list_lock);
   if (append_to_list(event_list, event) != 0) {
     fprintf(stderr, "Error appending event to list\n");
     pthread_mutex_unlock(&event_lock);
+    pthread_mutex_unlock(&event_list_lock);
     free(event->data);
     free(event);
     return 1;
   }
-
+  pthread_mutex_unlock(&event_list_lock);
   pthread_mutex_unlock(&event_lock);
-
   return 0;
 }
 
@@ -176,7 +178,6 @@ int ems_reserve(unsigned int event_id, size_t num_seats, size_t* xs, size_t* ys)
   }
 
   pthread_mutex_unlock(&event->event_mutex);
-
   return 0;
 }
 
@@ -192,8 +193,8 @@ int ems_show(unsigned int event_id, int fd) {
     fprintf(stderr, "Event not found\n");
     return 1;
   }
-  pthread_mutex_lock(&event->event_mutex);
   pthread_mutex_lock(&mutex_out);
+  pthread_mutex_lock(&event->event_mutex);
   for (size_t i = 1; i <= event->rows; i++) {
     for (size_t j = 1; j <= event->cols; j++) {
       unsigned int* seat = get_seat_with_delay(event, seat_index(event, i, j));
@@ -209,9 +210,8 @@ int ems_show(unsigned int event_id, int fd) {
 
     write(fd, "\n", 1);
   }
-  pthread_mutex_unlock(&mutex_out);
   pthread_mutex_unlock(&event->event_mutex);
-
+  pthread_mutex_unlock(&mutex_out);
   return 0;
 }
 
@@ -222,11 +222,14 @@ int ems_list_events(int fd) {
   }
 
   pthread_mutex_lock(&mutex_out);
+  pthread_mutex_lock(&event_list_lock);
   if (event_list->head == NULL) {
     write(fd, "No events\n", 10);
+    pthread_mutex_unlock(&event_list_lock);
     pthread_mutex_unlock(&mutex_out);
     return 0;
   }
+  pthread_mutex_unlock(&event_list_lock);
 
   struct ListNode* current = event_list->head;
   while (current != NULL) {
@@ -236,10 +239,10 @@ int ems_list_events(int fd) {
     sprintf(eventidstr, "%u", (current->event)->id);
     eventidstr[strlen(eventidstr)] = '\0';
     write(fd, eventidstr, sizeof(char)*(strlen(eventidstr)));
+    write(fd, "\n", 1);
     pthread_mutex_unlock(&((current->event)->event_mutex));
     current = current->next;
   }
-
   pthread_mutex_unlock(&mutex_out);
   return 0;
 }

@@ -4,6 +4,7 @@
         "unistd.h": "c",
         "stdlib.h": "c",
         "fcntl.h": "c",
-        "constants.h": "c"
+        "constants.h": "c",
+        "limits": "c"
     }
 }

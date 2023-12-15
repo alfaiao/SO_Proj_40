@@ -111,7 +111,6 @@ void *process_command(void *arg) {
               if (thread_id == 0) {
                   printf("Waiting...\n");
                   ems_wait(cmd_info->delay);
-                  pthread_mutex_unlock(&mutex_in);
               }
               else{
                 pthread_mutex_lock(&stop_mutex);
@@ -139,8 +138,8 @@ void *process_command(void *arg) {
               "  RESERVE <event_id> [(<x1>,<y1>) (<x2>,<y2>) ...]\n"
               "  SHOW <event_id>\n"
               "  LIST\n"
-              "  WAIT <delay_ms> [thread_id]\n"  // thread_id is not implemented
-              "  BARRIER\n"                      // Not implemented
+              "  WAIT <delay_ms> [thread_id]\n" 
+              "  BARRIER\n"                      
               "  HELP\n");
           break;
 
@@ -257,8 +256,8 @@ int main(int argc, char *argv[]) {
           if (result_thread == 1)
             result = 1;
         }
-        barrier = 0;
         if (result == 1){
+          barrier = 0;
           for (int i = 1; i <= MAX_THREADS; i++){
             cmd_info_array[i].inputFd = inputFd;
             cmd_info_array[i].outputFd = outputFd;

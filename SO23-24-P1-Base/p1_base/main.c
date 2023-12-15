@@ -214,6 +214,7 @@ int main(int argc, char *argv[]) {
     }
     if (!pid){
       strcpy(buffer, dirpath);
+      strcat(buffer, "/");
       strcat(buffer, dp->d_name);
       buffer[strlen(buffer)] = '\0';
       

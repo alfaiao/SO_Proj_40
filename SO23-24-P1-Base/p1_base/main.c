@@ -15,16 +15,11 @@
 #include "parser.h"
 
 struct CommandInfo {
-    int inputFd;
-    int outputFd;
-    unsigned int thread_id;
-    unsigned int event_id;
-    size_t num_rows;
-    size_t num_columns;
-    size_t num_coords;
+    int inputFd, outputFd;
+    unsigned int thread_id, event_id, delay;
+    size_t num_rows, num_columns, num_coords;
     size_t xs[MAX_RESERVATION_SIZE];
     size_t ys[MAX_RESERVATION_SIZE];
-    unsigned int delay;
 };
 
 pthread_mutex_t mutex_in = PTHREAD_MUTEX_INITIALIZER;

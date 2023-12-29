@@ -5,6 +5,9 @@
         "stdlib.h": "c",
         "fcntl.h": "c",
         "constants.h": "c",
-        "limits": "c"
+        "limits": "c",
+        "io.h": "c",
+        "operations.h": "c",
+        "stdio.h": "c"
     }
 }

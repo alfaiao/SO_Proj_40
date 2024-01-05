@@ -43,7 +43,7 @@ int ems_setup(char const* req_pipe_path, char const* resp_pipe_path, char const*
   memcpy(msg, &OP_CODE, sizeof(char));
   memcpy(msg + sizeof(char), req_pipe_path, strlen(req_pipe_path));
   memcpy(msg + sizeof(char)*(MAX_PIPE_NAME_SIZE+1), resp_pipe_path, strlen(resp_pipe_path));
-  write(fd_serv, msg, sizeof(msg));
+  write(fd_serv, msg, (MAX_PIPE_NAME_SIZE*2 + 1) * sizeof(char));
   close(fd_serv);
 
   if ((fd_req = open(req_pipe_path, O_WRONLY)) < 0) {
@@ -56,15 +56,16 @@ int ems_setup(char const* req_pipe_path, char const* resp_pipe_path, char const*
   }
 
   read(fd_resp, &session_id, sizeof(int));
-  printf("Session id is %d\n", session_id);
-
   return 0;
 }
 
 int ems_quit(void) { 
   
   char OP_CODE = '2';
-  write(fd_req, &OP_CODE, sizeof(char));
+  char msg[sizeof(char) + sizeof(int)];
+  memcpy(msg, &OP_CODE, sizeof(char));
+  memcpy(msg + sizeof(char), &session_id, sizeof(int));
+  write(fd_req, msg, sizeof(char) + sizeof(int));
   close(fd_req);
   close(fd_resp);
   return 0;
@@ -74,13 +75,14 @@ int ems_create(unsigned int event_id, size_t num_rows, size_t num_cols) {
 
   char OP_CODE = '3';
   int ret;
-  char msg[sizeof(char) + sizeof(unsigned int) + sizeof(size_t) * 2];
+  char msg[sizeof(char) + sizeof(int) + sizeof(unsigned int) + sizeof(size_t) * 2];
 
   memcpy(msg, &OP_CODE, sizeof(char));
-  memcpy(msg + sizeof(char), &event_id, sizeof(unsigned int));
-  memcpy(msg + sizeof(char) + sizeof(unsigned int), &num_rows, sizeof(size_t));
-  memcpy(msg + sizeof(char) + sizeof(unsigned int) + sizeof(size_t), &num_cols, sizeof(size_t));
-  write(fd_req, msg, sizeof(char) + sizeof(unsigned int) + sizeof(size_t) * 2);
+  memcpy(msg + sizeof(char), &session_id, sizeof(int));
+  memcpy(msg + sizeof(char) + sizeof(int), &event_id, sizeof(unsigned int));
+  memcpy(msg + sizeof(char) + sizeof(int) + sizeof(unsigned int), &num_rows, sizeof(size_t));
+  memcpy(msg + sizeof(char) + sizeof(int) + sizeof(unsigned int) + sizeof(size_t), &num_cols, sizeof(size_t));
+  write(fd_req, msg, sizeof(char) + sizeof(int) + sizeof(unsigned int) + sizeof(size_t) * 2);
   read(fd_resp, &ret, sizeof(int));
 
   return ret;
@@ -90,14 +92,15 @@ int ems_reserve(unsigned int event_id, size_t num_seats, size_t* xs, size_t* ys)
 
   char OP_CODE = '4';
   int ret;
-  char msg[sizeof(char) + sizeof(unsigned int) + sizeof(size_t) + sizeof(size_t)*num_seats*2];
+  char msg[sizeof(char) + sizeof(int) + sizeof(unsigned int) + sizeof(size_t)*(num_seats*2+1)];
 
   memcpy(msg, &OP_CODE, sizeof(char));
-  memcpy(msg + sizeof(char), &event_id, sizeof(unsigned int));
-  memcpy(msg + sizeof(char) + sizeof(unsigned int), &num_seats, sizeof(size_t));
-  memcpy(msg + sizeof(char) + sizeof(unsigned int) + sizeof(size_t), xs, sizeof(size_t)*num_seats);
-  memcpy(msg + sizeof(char) + sizeof(unsigned int) + sizeof(size_t) + sizeof(size_t)*num_seats, ys, sizeof(size_t)*num_seats);
-  write(fd_req, msg, sizeof(char) + sizeof(unsigned int) + sizeof(size_t) + sizeof(size_t)*num_seats*2);
+  memcpy(msg + sizeof(char), &session_id, sizeof(int));
+  memcpy(msg + sizeof(char) + sizeof(int), &event_id, sizeof(unsigned int));
+  memcpy(msg + sizeof(char) + sizeof(int) + sizeof(unsigned int), &num_seats, sizeof(size_t));
+  memcpy(msg + sizeof(char) + sizeof(int) + sizeof(unsigned int) + sizeof(size_t), xs, sizeof(size_t)*num_seats);
+  memcpy(msg + sizeof(char) + sizeof(int) + sizeof(unsigned int) + sizeof(size_t)*(num_seats+1), ys, sizeof(size_t)*num_seats);
+  write(fd_req, msg, sizeof(char) + sizeof(int) + sizeof(unsigned int) + sizeof(size_t)*(num_seats*2+1));
   read(fd_resp, &ret, sizeof(int));
 
   return ret;
@@ -107,12 +110,13 @@ int ems_show(int out_fd, unsigned int event_id) {
   char OP_CODE = '5';
   int ret;
   size_t num_rows, num_cols;
-  char msg[sizeof(char) + sizeof(unsigned int)];
+  char msg[sizeof(char) + sizeof(int) + sizeof(unsigned int)];
   
 
   memcpy(msg, &OP_CODE, sizeof(char));
-  memcpy(msg + sizeof(char), &event_id, sizeof(unsigned int));
-  write(fd_req, msg, sizeof(char) + sizeof(unsigned int));
+  memcpy(msg + sizeof(char), &session_id, sizeof(int));
+  memcpy(msg + sizeof(char) + sizeof(int), &event_id, sizeof(unsigned int));
+  write(fd_req, msg, sizeof(char) + sizeof(int) + sizeof(unsigned int));
 
   read(fd_resp, &ret, sizeof(int));
   if (ret != 0)
@@ -140,10 +144,13 @@ int ems_show(int out_fd, unsigned int event_id) {
 int ems_list_events(int out_fd) {
 
   char OP_CODE = '6';
+  char msg[sizeof(char) + sizeof(int)];
   int ret;
   size_t num_events;
 
-  write(fd_req, &OP_CODE, sizeof(char));
+  memcpy(msg, &OP_CODE, sizeof(char));
+  memcpy(msg + sizeof(char), &session_id, sizeof(int));
+  write(fd_req, msg, sizeof(char) + sizeof(int));
 
   read(fd_resp, &ret, sizeof(int));
   if (ret != 0)

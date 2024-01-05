@@ -5,6 +5,7 @@
 #include <unistd.h>
 
 #include "common/io.h"
+#include "common/constants.h"
 #include "eventlist.h"
 
 static struct EventList* event_list = NULL;
@@ -216,12 +217,15 @@ int ems_show(int out_fd, unsigned int event_id) {
     }
   }
 
-  ret = 0;
-  write(out_fd, &ret, sizeof(int));
-  write(out_fd, &num_rows, sizeof(size_t));
-  write(out_fd, &num_cols, sizeof(size_t));
-  write(out_fd, seats, sizeof(unsigned int)*num_cols*num_rows);
   pthread_mutex_unlock(&event->mutex);
+
+  ret = 0;
+  char msg[sizeof(int) + sizeof(size_t)*2 + sizeof(unsigned int)*num_cols*num_rows];
+  memcpy(msg, &ret, sizeof(int));
+  memcpy(msg + sizeof(int), &num_rows, sizeof(size_t));
+  memcpy(msg + sizeof(int) + sizeof(size_t), &num_cols, sizeof(size_t));
+  memcpy(msg + sizeof(int) + sizeof(size_t)*2, seats, sizeof(unsigned int)*num_cols*num_rows);
+  write(out_fd, msg, sizeof(int) + sizeof(size_t)*2 + sizeof(unsigned int)*num_cols*num_rows);
 
   return 0;
 }
@@ -245,6 +249,8 @@ int ems_list_events(int out_fd) {
   struct ListNode* to = event_list->tail;
   struct ListNode* current = event_list->head;
   size_t num_events = 0;
+  unsigned int buffer[MAX_RESERVATION_SIZE];
+
   if (current == NULL) {
     pthread_rwlock_unlock(&event_list->rwl);
     ret = 0;
@@ -252,13 +258,9 @@ int ems_list_events(int out_fd) {
     write(out_fd, &num_events, sizeof(size_t));
     return 0;
   }
-
-  unsigned int *event_ids;
-  event_ids = (unsigned int*)malloc(sizeof(unsigned int));
+  
   while (1) {
-    num_events++;
-    event_ids = (unsigned int*)realloc(event_ids, sizeof(unsigned int)*num_events);
-    event_ids[num_events-1] = (current->event)->id;
+    buffer[num_events++] = (current->event)->id;
 
     if (current == to) {
       break;
@@ -267,11 +269,65 @@ int ems_list_events(int out_fd) {
   }
 
   pthread_rwlock_unlock(&event_list->rwl);
+
+  unsigned int event_ids[num_events];
+  for (size_t i = 0; i < num_events; i++)
+    event_ids[i] = buffer[i];
   
   ret = 0;
-  write(out_fd, &ret, sizeof(int));
-  write(out_fd, &num_events, sizeof(size_t));
-  write(out_fd, event_ids, sizeof(unsigned int)*num_events);
-  free(event_ids);  
+  char msg[sizeof(int) + sizeof (size_t) + sizeof(unsigned int)*num_events];
+  memcpy(msg, &ret, sizeof(int));
+  memcpy(msg + sizeof(int), &num_events, sizeof(size_t));
+  memcpy(msg + sizeof(int) + sizeof(size_t), event_ids, sizeof(unsigned int)*num_events);
+  write(out_fd, msg, sizeof(int) + sizeof (size_t) + sizeof(unsigned int)*num_events);
+  return 0;
+}
+
+int ems_show_all_events() {
+
+  if (event_list == NULL) {
+    fprintf(stderr, "EMS state must be initialized\n");
+    return 1;
+  }
+
+  if (pthread_rwlock_rdlock(&event_list->rwl) != 0) {
+    fprintf(stderr, "Error locking list rwl\n");
+    return 1;
+  }
+
+  struct ListNode* to = event_list->tail;
+  struct ListNode* current = event_list->head;
+
+  if (current == NULL) {
+    pthread_rwlock_unlock(&event_list->rwl);
+    return 0;
+  }
+
+  while (1) {
+    printf("Event: %u\n", (current->event)->id);
+
+    if (pthread_mutex_lock(&(current->event)->mutex) != 0) {
+      fprintf(stderr, "Error locking mutex\n");
+      return 1;
+    }
+
+    for (size_t i = 1; i <= (current->event)->rows; i++) {
+      for (size_t j = 1; j <= (current->event)->cols; j++) {
+        printf("%u", (current->event)->data[seat_index((current->event), i, j)]);
+        if (j < (current->event)->cols)
+          printf(" ");
+      }
+      printf("\n");
+    }
+
+    pthread_mutex_unlock(&(current->event)->mutex);
+
+    if (current == to) {
+      break;
+    }
+    current = current->next;
+  }
+
+  pthread_rwlock_unlock(&event_list->rwl);
   return 0;
 }

@@ -8,6 +8,8 @@
         "limits": "c",
         "io.h": "c",
         "operations.h": "c",
-        "stdio.h": "c"
+        "stdio.h": "c",
+        "*.tcc": "c",
+        "pthread.h": "c"
     }
 }
